@@ -1,0 +1,175 @@
+  <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word Search Generator</title>
+    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        function WordSearchGenerator() {
+            const [grid, setGrid] = React.useState([]);
+            const [words, setWords] = React.useState('');
+            const [size, setSize] = React.useState(10);
+            const [showAnswers, setShowAnswers] = React.useState(false);
+
+            const generateWordSearch = () => {
+                const wordList = words.toUpperCase().split('\n').filter(w => w.trim() !== '');
+                const newGrid = Array(size).fill().map(() => Array(size).fill(''));
+                const directions = [[0, 1], [1, 0], [1, 1], [-1, 1]];
+                const placedWords = [];
+
+                const placeWord = (word) => {
+                    for (let attempt = 0; attempt < 100; attempt++) {
+                        const direction = directions[Math.floor(Math.random() * directions.length)];
+                        const startX = Math.floor(Math.random() * size);
+                        const startY = Math.floor(Math.random() * size);
+
+                        if (canPlaceWord(word, startX, startY, direction)) {
+                            for (let i = 0; i < word.length; i++) {
+                                newGrid[startY + i * direction[1]][startX + i * direction[0]] = word[i];
+                            }
+                            placedWords.push({word, startX, startY, endX: startX + (word.length - 1) * direction[0], endY: startY + (word.length - 1) * direction[1]});
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                const canPlaceWord = (word, startX, startY, direction) => {
+                    if (startX + word.length * direction[0] > size || startX + word.length * direction[0] < 0) return false;
+                    if (startY + word.length * direction[1] > size || startY + word.length * direction[1] < 0) return false;
+
+                    for (let i = 0; i < word.length; i++) {
+                        const cell = newGrid[startY + i * direction[1]][startX + i * direction[0]];
+                        if (cell !== '' && cell !== word[i]) return false;
+                    }
+                    return true;
+                };
+
+                wordList.forEach(placeWord);
+
+                for (let y = 0; y < size; y++) {
+                    for (let x = 0; x < size; x++) {
+                        if (newGrid[y][x] === '') {
+                            newGrid[y][x] = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+                        }
+                    }
+                }
+
+                setGrid({grid: newGrid, placedWords});
+            };
+
+            const exportSVG = (withAnswers) => {
+                const svgContent = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="${size * 30}" height="${size * 30}">
+                    <rect width="100%" height="100%" fill="white"/>
+                    ${grid.grid.map((row, y) => 
+                        row.map((char, x) => 
+                            `<text x="${x * 30 + 15}" y="${y * 30 + 20}" font-family="Arial" font-size="20" text-anchor="middle">${char}</text>`
+                        ).join('')
+                    ).join('')}
+                    ${withAnswers ? grid.placedWords.map(({startX, startY, endX, endY}) => `
+                        <line x1="${startX * 30 + 15}" y1="${startY * 30 + 15}" x2="${endX * 30 + 15}" y2="${endY * 30 + 15}" stroke="red" stroke-width="2"/>
+                    `).join('') : ''}
+                </svg>`;
+
+                const blob = new Blob([svgContent], {type: 'image/svg+xml'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = withAnswers ? 'word-search-with-answers.svg' : 'word-search.svg';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            return (
+                <div className="container mx-auto p-4">
+                    <h1 className="text-3xl font-bold mb-4">Word Search Generator</h1>
+                    <div className="mb-4">
+                        <label className="block mb-2">Words (one per line):</label>
+                        <textarea 
+                            className="w-full p-2 border rounded" 
+                            rows="5" 
+                            value={words} 
+                            onChange={(e) => setWords(e.target.value)}
+                        ></textarea>
+                    </div>
+                    <div className="mb-4">
+                        <label className="block mb-2">Grid Size: {size}x{size}</label>
+                        <input 
+                            type="range" 
+                            min="5" 
+                            max="20" 
+                            value={size} 
+                            onChange={(e) => setSize(parseInt(e.target.value))} 
+                            className="w-full"
+                        />
+                    </div>
+                    <button 
+                        onClick={generateWordSearch} 
+                        className="bg-blue-500 text-white px-4 py-2 rounded mr-2"
+                    >
+                        Generate Word Search
+                    </button>
+                    <button 
+                        onClick={() => exportSVG(false)} 
+                        className="bg-green-500 text-white px-4 py-2 rounded mr-2"
+                    >
+                        Export as SVG
+                    </button>
+                    <button 
+                        onClick={() => exportSVG(true)} 
+                        className="bg-red-500 text-white px-4 py-2 rounded mr-2"
+                    >
+                        Export with Answers
+                    </button>
+                    <button 
+                        onClick={() => setShowAnswers(!showAnswers)} 
+                        className="bg-yellow-500 text-white px-4 py-2 rounded"
+                    >
+                        {showAnswers ? 'Hide Answers' : 'Show Answers'}
+                    </button>
+                    {grid.grid && (
+                        <div className="mt-4 relative">
+                            <div style={{display: 'grid', gridTemplateColumns: `repeat(${size}, 1fr)`}}>
+                                {grid.grid.map((row, y) => 
+                                    row.map((char, x) => 
+                                        <div key={`${x}-${y}`} className="w-8 h-8 border flex items-center justify-center">
+                                            {char}
+                                        </div>
+                                    )
+                                )}
+                            </div>
+                            {showAnswers && (
+                                <svg className="absolute top-0 left-0 w-full h-full pointer-events-none">
+                                    {grid.placedWords.map(({startX, startY, endX, endY}, index) => (
+                                        <line 
+                                            key={index}
+                                            x1={startX * 32 + 16} 
+                                            y1={startY * 32 + 16} 
+                                            x2={endX * 32 + 16} 
+                                            y2={endY * 32 + 16} 
+                                            stroke="red" 
+                                            strokeWidth="2"
+                                        />
+                                    ))}
+                                </svg>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.render(<WordSearchGenerator />, document.getElementById('root'));
+    </script>
+</body>
+</html>
